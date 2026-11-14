@@ -10,7 +10,7 @@ async function getManaged() {
 async function render() {
   const scroll = listEl.scrollTop;
   listEl.textContent = '';
-  const { snapshot } = await chrome.storage.local.get('snapshot');
+  const { snapshot, order } = await chrome.storage.local.get(['snapshot', 'order']);
   const live = (await getManaged()).sort((a, b) => a.name.localeCompare(b.name));
   const liveIds = new Set(live.map(e => e.id));
   const saved = new Set((snapshot || []).filter(e => e.enabled).map(e => e.id));
@@ -19,12 +19,19 @@ async function render() {
     ? `Snapshot saved (${saved.size} were enabled). Tick an extension to enable it, untick to disable.`
     : 'Untick an extension to disable it, tick to enable.';
 
-  // Ticked extensions come first when the popup opens. Among the unticked, the ones a snapshot
-  // saved as enabled come before the rest.
+  // The order is fixed the first time the list is shown (ticked extensions
+  // first) and saved, so ticking and unticking never moves a row. Extensions
+  // installed later go to the end.
+  const pos = new Map((order || []).map((id, i) => [id, i]));
   const rank = e => (e.enabled ? 0 : saved.has(e.id) ? 1 : 2);
-  const rows = live
-    .sort((a, b) => rank(a) - rank(b))
-    .map(e => ({ id: e.id, name: e.name, ext: e }));
+  const place = e => (pos.has(e.id) ? pos.get(e.id) : order ? Infinity : rank(e));
+  live.sort((a, b) => {
+    const pa = place(a), pb = place(b);
+    return pa === pb ? 0 : pa - pb;
+  });
+  const ids = live.map(e => e.id);
+  if (!order || ids.join() !== order.join()) await chrome.storage.local.set({ order: ids });
+  const rows = live.map(e => ({ id: e.id, name: e.name, ext: e }));
   for (const snap of snapshot || []) {
     if (snap.enabled && !liveIds.has(snap.id)) rows.push({ id: snap.id, name: snap.name, ext: null });
   }
@@ -53,7 +60,6 @@ async function render() {
       box.addEventListener('change', async () => {
         try {
           await chrome.management.setEnabled(item.id, box.checked);
-          // The row stays where it is; the order only changes when the popup reopens.
           row.classList.toggle('off', !box.checked);
         } catch (err) {
           box.checked = !box.checked;
