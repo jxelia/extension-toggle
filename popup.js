@@ -19,7 +19,7 @@ async function render() {
     ? `Snapshot saved (${saved.size} were enabled). Tick an extension to enable it, untick to disable.`
     : 'Untick an extension to disable it, tick to enable.';
 
-  // Ticked extensions come first. Among the unticked, the ones a snapshot
+  // Ticked extensions come first when the popup opens. Among the unticked, the ones a snapshot
   // saved as enabled come before the rest.
   const rank = e => (e.enabled ? 0 : saved.has(e.id) ? 1 : 2);
   const rows = live
@@ -47,12 +47,14 @@ async function render() {
       row.classList.add('gone');
     } else {
       box.checked = item.ext.enabled;
+      row.classList.toggle('off', !item.ext.enabled);
       // Extensions installed by policy can't be turned off.
       if (item.ext.enabled && !item.ext.mayDisable) box.disabled = true;
       box.addEventListener('change', async () => {
         try {
           await chrome.management.setEnabled(item.id, box.checked);
-          await render();
+          // The row stays where it is; the order only changes when the popup reopens.
+          row.classList.toggle('off', !box.checked);
         } catch (err) {
           box.checked = !box.checked;
           statusEl.textContent = `Could not change ${item.name}.`;
