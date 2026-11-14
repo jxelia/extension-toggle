@@ -8,6 +8,7 @@ async function getManaged() {
 }
 
 async function render() {
+  const scroll = listEl.scrollTop;
   listEl.textContent = '';
   const { snapshot } = await chrome.storage.local.get('snapshot');
   const live = (await getManaged()).sort((a, b) => a.name.localeCompare(b.name));
@@ -15,14 +16,15 @@ async function render() {
   const saved = new Set((snapshot || []).filter(e => e.enabled).map(e => e.id));
 
   statusEl.textContent = snapshot
-    ? `Snapshot saved (${saved.size} were enabled, listed first). Tick an extension to enable it, untick to disable.`
+    ? `Snapshot saved (${saved.size} were enabled). Tick an extension to enable it, untick to disable.`
     : 'Untick an extension to disable it, tick to enable.';
 
-  // With a snapshot, the extensions it saved as enabled come first.
-  const rows = [
-    ...live.filter(e => saved.has(e.id)),
-    ...live.filter(e => !saved.has(e.id)),
-  ].map(e => ({ id: e.id, name: e.name, ext: e }));
+  // Ticked extensions come first. Among the unticked, the ones a snapshot
+  // saved as enabled come before the rest.
+  const rank = e => (e.enabled ? 0 : saved.has(e.id) ? 1 : 2);
+  const rows = live
+    .sort((a, b) => rank(a) - rank(b))
+    .map(e => ({ id: e.id, name: e.name, ext: e }));
   for (const snap of snapshot || []) {
     if (snap.enabled && !liveIds.has(snap.id)) rows.push({ id: snap.id, name: snap.name, ext: null });
   }
@@ -50,6 +52,7 @@ async function render() {
       box.addEventListener('change', async () => {
         try {
           await chrome.management.setEnabled(item.id, box.checked);
+          await render();
         } catch (err) {
           box.checked = !box.checked;
           statusEl.textContent = `Could not change ${item.name}.`;
@@ -59,6 +62,7 @@ async function render() {
     row.append(box, label);
     listEl.appendChild(row);
   }
+  listEl.scrollTop = scroll;
 }
 
 document.getElementById('save').addEventListener('click', async () => {
