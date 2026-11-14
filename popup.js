@@ -10,40 +10,49 @@ async function getManaged() {
 async function render() {
   listEl.textContent = '';
   const { snapshot } = await chrome.storage.local.get('snapshot');
-  if (!snapshot) {
-    statusEl.textContent = 'No saved snapshot.';
-    return;
-  }
-  const wasEnabled = snapshot.filter(e => e.enabled);
-  statusEl.textContent =
-    `Snapshot saved (${wasEnabled.length} were enabled). Tick an extension to re-enable it, untick to disable.`;
+  const live = (await getManaged()).sort((a, b) => a.name.localeCompare(b.name));
+  const liveIds = new Set(live.map(e => e.id));
+  const saved = new Set((snapshot || []).filter(e => e.enabled).map(e => e.id));
 
-  const current = new Map((await getManaged()).map(e => [e.id, e]));
-  for (const snap of wasEnabled) {
-    const live = current.get(snap.id);
+  statusEl.textContent = snapshot
+    ? `Snapshot saved (${saved.size} were enabled, listed first). Tick an extension to enable it, untick to disable.`
+    : 'Untick an extension to disable it, tick to enable.';
+
+  // With a snapshot, the extensions it saved as enabled come first.
+  const rows = [
+    ...live.filter(e => saved.has(e.id)),
+    ...live.filter(e => !saved.has(e.id)),
+  ].map(e => ({ id: e.id, name: e.name, ext: e }));
+  for (const snap of snapshot || []) {
+    if (snap.enabled && !liveIds.has(snap.id)) rows.push({ id: snap.id, name: snap.name, ext: null });
+  }
+
+  for (const item of rows) {
     const row = document.createElement('div');
     row.className = 'row';
 
     const box = document.createElement('input');
     box.type = 'checkbox';
-    box.id = 'cb-' + snap.id;
+    box.id = 'cb-' + item.id;
 
     const label = document.createElement('label');
     label.htmlFor = box.id;
-    label.textContent = snap.name;
+    label.textContent = item.name;
 
-    if (!live) {
+    if (!item.ext) {
       box.disabled = true;
       label.textContent += ' (no longer installed)';
       row.classList.add('gone');
     } else {
-      box.checked = live.enabled;
+      box.checked = item.ext.enabled;
+      // Extensions installed by policy can't be turned off.
+      if (item.ext.enabled && !item.ext.mayDisable) box.disabled = true;
       box.addEventListener('change', async () => {
         try {
-          await chrome.management.setEnabled(snap.id, box.checked);
+          await chrome.management.setEnabled(item.id, box.checked);
         } catch (err) {
           box.checked = !box.checked;
-          statusEl.textContent = `Could not change ${snap.name}.`;
+          statusEl.textContent = `Could not change ${item.name}.`;
         }
       });
     }
