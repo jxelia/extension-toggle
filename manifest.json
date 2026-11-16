@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Extension Snapshot Toggle",
+  "name": "Extension Toggle",
   "version": "1.0",
   "description": "Saves which extensions are enabled, disables them all, and restores the saved state later.",
   "permissions": ["management", "storage"],
