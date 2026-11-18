@@ -1,6 +1,6 @@
 # Extension Toggle
 
-A Chrome extension that saves which extensions are enabled, disables them all, and restores the saved state later. It's useful for checking whether another extension is causing a problem.
+Tick an extension on/off easily, or note which extensions are enabled, disable all, and restore the saved state later. Useful for developers or just checking installed extension
 
 ## Use
 
